@@ -29,6 +29,8 @@ class Chef
        deps do
          require 'fog'
          require 'readline'
+         require 'socket'
+         require 'timeout'
          require 'chef/json_compat'
          require 'chef/knife/bootstrap'
          Chef::Knife::Bootstrap.load_deps
@@ -149,7 +151,17 @@ class Chef
 
       def tcp_test_ssh(hostname)
         Chef::Log.debug("testing ssh connection to #{hostname}")
-        tcp_socket = TCPSocket.new(hostname, 22)
+
+        tcp_socket = nil
+        begin
+          Timeout.timeout(10) do
+            tcp_socket = TCPSocket.new(hostname, 22)
+          end
+        rescue Timeout::Error
+          Chef::Log.debug("Timeout::Error, retrying")
+          return false
+        end
+
         readable = IO.select([tcp_socket], nil, nil, 5)
         if readable
           Chef::Log.debug("sshd accepting connections on #{hostname}, banner is #{tcp_socket.gets}")
