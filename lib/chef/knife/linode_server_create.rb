@@ -52,7 +52,7 @@ class Chef
         :long => "--linode-image IMAGE",
         :description => "The image for the server",
         :proc => Proc.new { |i| Chef::Config[:knife][:linode_image] = i },
-        :default => 99 # Ubuntu 12.04 LTS
+        :default => 124 # Ubuntu 14.04 LTS
 
       option :linode_kernel,
         :short => "-k KERNEL",
@@ -149,6 +149,22 @@ class Chef
            Chef::Config[:knife][:hints][name] = path ? JSON.parse(::File.read(path)) : Hash.new
         }
 
+      option :secret,
+        :short => "-s SECRET",
+        :long  => "--secret ",
+        :description => "The secret key to use to encrypt data bag item values",
+        :proc => Proc.new { |s| Chef::Config[:knife][:secret] = s }
+
+      option :secret_file,
+        :long => "--secret-file SECRET_FILE",
+        :description => "A file containing the secret key to use to encrypt data bag item values",
+        :proc => Proc.new { |sf| Chef::Config[:knife][:secret_file] = sf }
+
+      option :display_group,
+        :short => "-G GROUP",
+        :long => "--display-group GROUP",
+        :description => "Specify a display group for linode web portal"
+
       def tcp_test_ssh(hostname)
         Chef::Log.debug("testing ssh connection to #{hostname}")
 
@@ -222,6 +238,8 @@ class Chef
                     :password => locate_config_value(:ssh_password)
                  )
 
+        connection.linode_update(server.id, {:lpm_displaygroup => config[:display_group]}) if config[:display_group]
+
         fqdn = server.ips.select { |lip| !( lip.ip =~ /^192\.168\./ || lip.ip =~ /^10\./ || lip.ip =~ /^172\.(1[6-9]|2[0-9]|3[0-1])\./ ) }.first.ip
 
         msg_pair("Linode ID", server.id.to_s)
@@ -242,6 +260,7 @@ class Chef
           puts("done")
         }
 
+        Chef::Config[:knife][:hints]['linode'] ||= Hash.new
         Chef::Config[:knife][:hints]['linode'].merge!({
             'server_id' => server.id.to_s,
             'datacenter_id' => locate_config_value(:linode_datacenter),
@@ -270,6 +289,10 @@ class Chef
         bootstrap.config[:template_file] = locate_config_value(:template_file)
         bootstrap.config[:environment] = config[:environment]
         bootstrap.config[:host_key_verify] = config[:host_key_verify]
+        bootstrap.config[:secret] = locate_config_value(:secret)
+        bootstrap.config[:secret_file] = locate_config_value(:secret_file)
+        bootstrap.config[:private_ip] = server.ips.reject{ |ip| ip.public }.first.ip
+        bootstrap.config[:public_ip] = server.public_ip_address
         bootstrap
       end
 
